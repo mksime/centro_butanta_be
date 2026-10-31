@@ -18,6 +18,8 @@ class Administrador(Base):
 
     id_administrador: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     nome_administrador: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    senha_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     cargo: Mapped[str] = mapped_column(String(100), nullable=False)
     setor: Mapped[str] = mapped_column(String(100), nullable=False)
 
@@ -52,6 +54,8 @@ class Associado(Base):
     telefone: Mapped[str] = mapped_column(String(20), nullable=True)
     email: Mapped[str] = mapped_column(String(200), nullable=True)
     num_carteira_associado: Mapped[str] = mapped_column(String(50), nullable=True, unique=True)
+    documento: Mapped[str] = mapped_column(String(20), nullable=True)
+    tipo_associacao: Mapped[str] = mapped_column(String(50), nullable=True)
     situacao_cadastro: Mapped[str] = mapped_column(String(50), default="ativo")
     dth_ingresso: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     dth_saida: Mapped[datetime] = mapped_column(DateTime, nullable=True)

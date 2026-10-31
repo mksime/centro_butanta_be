@@ -15,6 +15,18 @@ class Settings(BaseSettings):
     APP_NAME: str = "Centro Comunitário Butantã API"
     APP_V1_PREFIX: str = "/api/v1"
 
+    # Auth
+    SECRET_KEY: str = "mude-em-producao-chave-secreta-min-32-caracteres"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Seed do administrador inicial (desenvolvimento / primeiro deploy)
+    ADMIN_SEED_ENABLED: bool = False
+    ADMIN_SEED_EMAIL: str = "admin@centrobutanta.com"
+    ADMIN_SEED_PASSWORD: str = "admin123"
+    ADMIN_SEED_CARGO: str = "Coordenador"
+    ADMIN_SEED_SETOR: str = "Administrativo"
+
     @property
     def DATABASE_URL(self) -> str:
         return (

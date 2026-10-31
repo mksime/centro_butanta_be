@@ -8,16 +8,18 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 class AdministradorBase(BaseModel):
     nome_administrador: str = Field(..., max_length=200)
+    email: EmailStr = Field(..., max_length=200)
     cargo: str = Field(..., max_length=100)
     setor: str = Field(..., max_length=100)
 
 
 class AdministradorCreate(AdministradorBase):
-    pass
+    senha: str = Field(..., min_length=6, max_length=128)
 
 
 class AdministradorUpdate(BaseModel):
     nome_administrador: str | None = Field(None, max_length=200)
+    email: EmailStr | None = Field(None, max_length=200)
     cargo: str | None = Field(None, max_length=100)
     setor: str | None = Field(None, max_length=100)
 
@@ -63,6 +65,8 @@ class AssociadoBase(BaseModel):
     telefone: str | None = Field(None, max_length=20)
     email: EmailStr | None = None
     num_carteira_associado: str | None = Field(None, max_length=50)
+    documento: str | None = Field(None, max_length=20)
+    tipo_associacao: str | None = Field(None, max_length=50)
     situacao_cadastro: str = "ativo"
     dth_ingresso: datetime | None = None
     dth_saida: datetime | None = None
@@ -79,6 +83,8 @@ class AssociadoUpdate(BaseModel):
     telefone: str | None = Field(None, max_length=20)
     email: EmailStr | None = None
     num_carteira_associado: str | None = Field(None, max_length=50)
+    documento: str | None = Field(None, max_length=20)
+    tipo_associacao: str | None = Field(None, max_length=50)
     situacao_cadastro: str | None = None
     dth_ingresso: datetime | None = None
     dth_saida: datetime | None = None

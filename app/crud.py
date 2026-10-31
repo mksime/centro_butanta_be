@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import get_password_hash
 
 
 # ─── Administrador ──────────────────────────────────────────────────────────
@@ -17,7 +18,10 @@ def get_administradores(db: Session, skip: int = 0, limit: int = 100) -> list[mo
 
 
 def create_administrador(db: Session, data: schemas.AdministradorCreate) -> models.Administrador:
-    admin = models.Administrador(**data.model_dump())
+    admin = models.Administrador(
+        **data.model_dump(exclude={"senha"}),
+        senha_hash=get_password_hash(data.senha),
+    )
     db.add(admin)
     db.commit()
     db.refresh(admin)
