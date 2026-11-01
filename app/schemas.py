@@ -100,10 +100,24 @@ class AssociadoUpdate(BaseModel):
 
 
 class AssociadoOut(AssociadoBase):
+    data_ultimo_pagamento: date | None = None
     model_config = ConfigDict(from_attributes=True)
     id_associado: int
     id_moradia: int
     id_administrador: int
+
+
+class MensalidadeUpdate(BaseModel):
+    atraso: bool
+    data_pagamento: date | None = None
+
+    @model_validator(mode="after")
+    def validar_data_pagamento(self):
+        if not self.atraso and self.data_pagamento is None:
+            raise ValueError("Informe a data do pagamento.")
+        if self.atraso and self.data_pagamento is not None:
+            raise ValueError("Não informe data de pagamento ao registrar atraso.")
+        return self
 
 
 class AssociadoComMoradiaCreate(BaseModel):

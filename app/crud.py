@@ -248,3 +248,16 @@ def update_pagamento(
 def delete_pagamento(db: Session, pagamento: models.Pagamento) -> None:
     db.delete(pagamento)
     db.commit()
+
+
+def registrar_mensalidade(
+    db: Session, associado: models.Associado, data: schemas.MensalidadeUpdate,
+    id_administrador: int,
+) -> models.Associado:
+    associado.situacao_cadastro = "mensalidade_atrasada" if data.atraso else "ativo"
+    if not data.atraso:
+        associado.data_ultimo_pagamento = data.data_pagamento
+    associado.id_administrador = id_administrador
+    db.commit()
+    db.refresh(associado)
+    return associado

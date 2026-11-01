@@ -61,6 +61,7 @@ class Associado(Base):
     documento: Mapped[str] = mapped_column(String(20), nullable=True)
     tipo_associacao: Mapped[str] = mapped_column(String(50), nullable=True)
     situacao_cadastro: Mapped[str] = mapped_column(String(50), default="ativo")
+    data_ultimo_pagamento: Mapped[date | None] = mapped_column(Date, nullable=True)
     dth_ingresso: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     dth_saida: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 

@@ -268,3 +268,21 @@ O projeto já está preparado para deploy:
 - **docker-compose.yml** — pode ser adaptado para containers na nuvem
 
 Provedores comuns: **Render**, **Railway**, **Fly.io**, **AWS (ECS/RDS)**, **GCP (Cloud Run/Cloud SQL)**, **Azure (App Service)**.
+
+
+## Registrar pagamento ou atraso
+
+`PUT /api/v1/associados/{id}/mensalidade` exige autenticação e um cadastro `ativo` ou `mensalidade_atrasada`.
+
+- Pagamento: `{"atraso": false, "data_pagamento": "2026-11-01"}` salva `ativo` e `data_ultimo_pagamento`.
+- Atraso: `{"atraso": true, "data_pagamento": null}` salva `mensalidade_atrasada` e preserva a data do último pagamento.
+
+A alteração aplica-se somente ao associado selecionado. Este fluxo registra situação e data, sem gerar um lançamento financeiro com valor ou forma de pagamento inventados.
+
+Para um banco existente, antes de iniciar a API atualizada, execute a migração aditiva em `migrations/20261101_mensalidade.sql`, usando a conexão do seu PostgreSQL. Exemplo com os nomes padrão de desenvolvimento:
+
+```sh
+psql -h localhost -U cbbe -d centro_butanta -f migrations/20261101_mensalidade.sql
+```
+
+O `create_all` só cria tabelas novas; ele não acrescenta essa coluna em tabelas existentes. A migração SQL específica não executa a revisão Alembic antiga `f77b5d7380e7`, cujo `upgrade` contém comandos de exclusão de tabelas. Essa revisão precisa de revisão separada antes de qualquer `alembic upgrade head` em banco com dados.

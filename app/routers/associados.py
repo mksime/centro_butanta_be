@@ -140,3 +140,18 @@ def delete_associado(
     if not associado:
         raise HTTPException(status_code=404, detail="Associado não encontrado")
     crud.delete_associado(db, associado)
+
+
+@router.put("/{id_associado}/mensalidade", response_model=schemas.AssociadoOut)
+def registrar_mensalidade(
+    id_associado: int,
+    data: schemas.MensalidadeUpdate,
+    db: Session = Depends(get_db),
+    admin: models.Administrador = Depends(get_current_active_admin),
+):
+    associado = crud.get_associado(db, id_associado)
+    if not associado:
+        raise HTTPException(status_code=404, detail="Associado não encontrado")
+    if associado.situacao_cadastro not in {"ativo", "mensalidade_atrasada"}:
+        raise HTTPException(status_code=409, detail="O cadastro precisa estar ativado para registrar pagamento ou atraso.")
+    return crud.registrar_mensalidade(db, associado, data, admin.id_administrador)
