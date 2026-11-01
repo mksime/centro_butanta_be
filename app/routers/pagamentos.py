@@ -39,7 +39,12 @@ def create_pagamento(
     associado = crud.get_associado(db, data.id_associado)
     if not associado:
         raise HTTPException(status_code=404, detail="Associado não encontrado")
-    return crud.create_pagamento(db, data)
+    if data.id_administrador is not None and data.id_administrador != admin.id_administrador:
+        raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
+
+    payload = data.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+    payload["id_administrador"] = admin.id_administrador
+    return crud.create_pagamento(db, schemas.PagamentoCreate(**payload))
 
 
 @router.put("/{id_pagamento}", response_model=schemas.PagamentoOut)
@@ -52,11 +57,12 @@ def update_pagamento(
     pagamento = crud.get_pagamento(db, id_pagamento)
     if not pagamento:
         raise HTTPException(status_code=404, detail="Pagamento não encontrado")
-    if data.id_administrador is not None:
-        admin_db = crud.get_administrador(db, data.id_administrador)
-        if not admin_db:
-            raise HTTPException(status_code=404, detail="Administrador não encontrado")
-    return crud.update_pagamento(db, pagamento, data)
+    if data.id_administrador is not None and data.id_administrador != admin.id_administrador:
+        raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
+
+    payload = data.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+    payload["id_administrador"] = admin.id_administrador
+    return crud.update_pagamento(db, pagamento, schemas.PagamentoUpdate(**payload))
 
 
 @router.delete("/{id_pagamento}", status_code=204)

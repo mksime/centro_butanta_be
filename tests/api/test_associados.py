@@ -42,6 +42,22 @@ def test_criar_associado_moradia_inexistente_retorna_404(client, auth_headers):
     assert response.json()["detail"] == "Moradia não encontrada"
 
 
+def test_criar_associado_ignora_id_administrador_do_cliente(client, auth_headers, db):
+    """O administrador autenticado deve ser o único registro persistido no campo id_administrador."""
+    moradia = _criar_moradia(client, auth_headers)
+    admin = db.query(__import__('app.models', fromlist=['Administrador']).Administrador).filter_by(email="admin@teste.com").first()
+    payload = {
+        "nome": "Maria Silva",
+        "data_nascimento": "1990-01-01",
+        "email": "maria@example.com",
+        "id_moradia": moradia["id_moradia"],
+        "id_administrador": admin.id_administrador + 999,
+    }
+    response = client.post("/api/v1/associados/", json=payload, headers=auth_headers)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Você não pode atribuir outro administrador"
+
+
 def test_criar_associado_com_documento_e_tipo_associacao_retorna_201(client, auth_headers):
     """Documento e tipo_associacao são opcionais e devem ser persistidos."""
     moradia = _criar_moradia(client, auth_headers)
@@ -108,7 +124,7 @@ def test_criar_moradia_e_associado_juntos_reaproveita_endereco(client, auth_head
     assert segunda.json()["id_associado"] != primeira.json()["id_associado"]
 
 
-def test_atualizar_associado_e_moradia_juntos_retorna_200(client, auth_headers):
+def test_atualizar_associado_e_moradia_juntos_retorna_200(client, auth_headers, db):
     """PUT conjunto deve atualizar os dados do associado e da moradia vinculada."""
     moradia = _criar_moradia(client, auth_headers)
     associado = client.post("/api/v1/associados/", json={
