@@ -53,7 +53,27 @@ def get_moradias(db: Session, skip: int = 0, limit: int = 100) -> list[models.Mo
     return list(db.scalars(select(models.Moradia).offset(skip).limit(limit)))
 
 
+def get_moradia_by_endereco(
+    db: Session, cep: str | None, rua: str, numero: str
+) -> models.Moradia | None:
+    """Busca uma moradia já cadastrada pelo endereço (CEP + rua + número)."""
+    return (
+        db.scalars(
+            select(models.Moradia).filter(
+                models.Moradia.cep == cep,
+                models.Moradia.rua == rua,
+                models.Moradia.numero == numero,
+            )
+        )
+        .first()
+    )
+
+
 def create_moradia(db: Session, data: schemas.MoradiaCreate) -> models.Moradia:
+    """Cria uma moradia, mas reaproveita a existente para o mesmo endereço."""
+    moradia_existente = get_moradia_by_endereco(db, data.cep, data.rua, data.numero)
+    if moradia_existente:
+        return moradia_existente
     moradia = models.Moradia(**data.model_dump())
     db.add(moradia)
     db.commit()
@@ -94,6 +114,22 @@ def create_associado(db: Session, data: schemas.AssociadoCreate) -> models.Assoc
     return associado
 
 
+def create_associado_com_moradia(
+    db: Session,
+    moradia_data: schemas.MoradiaCreate,
+    associado_data: dict | schemas.AssociadoBase,
+) -> models.Associado:
+    moradia = create_moradia(db, moradia_data)
+    if isinstance(associado_data, dict):
+        payload = dict(associado_data)
+    else:
+        payload = associado_data.model_dump()
+
+    payload["id_moradia"] = moradia.id_moradia
+    associado = create_associado(db, schemas.AssociadoCreate(**payload))
+    return associado
+
+
 def update_associado(
     db: Session, associado: models.Associado, data: schemas.AssociadoUpdate
 ) -> models.Associado:
@@ -101,6 +137,39 @@ def update_associado(
         setattr(associado, field, value)
     db.commit()
     db.refresh(associado)
+    return associado
+
+
+def update_associado_com_moradia(
+    db: Session,
+    associado: models.Associado,
+    moradia_data: schemas.MoradiaUpdate | None = None,
+    associado_data: schemas.AssociadoUpdate | None = None,
+) -> models.Associado:
+    if moradia_data is not None:
+        moradia_update = moradia_data.model_dump(exclude_unset=True)
+        if moradia_update:
+            moradia_existente = get_moradia_by_endereco(
+                db,
+                moradia_update.get("cep", associado.moradia.cep),
+                moradia_update.get("rua", associado.moradia.rua),
+                moradia_update.get("numero", associado.moradia.numero),
+            )
+            if moradia_existente and moradia_existente.id_moradia != associado.id_moradia:
+                associado.id_moradia = moradia_existente.id_moradia
+                db.commit()
+                db.refresh(associado)
+            else:
+                update_moradia(db, associado.moradia, moradia_data)
+                db.refresh(associado)
+
+    if associado_data is not None:
+        associado_update = associado_data.model_dump(exclude_unset=True)
+        if "id_moradia" in associado_update and associado_update["id_moradia"] is not None:
+            associado.id_moradia = associado_update.pop("id_moradia")
+        if associado_update:
+            associado = update_associado(db, associado, schemas.AssociadoUpdate(**associado_update))
+
     return associado
 
 

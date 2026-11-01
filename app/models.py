@@ -37,7 +37,10 @@ class Moradia(Base):
     id_moradia: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     rua: Mapped[str] = mapped_column(String(200), nullable=False)
     numero: Mapped[str] = mapped_column(String(20), nullable=False)
-    bloco: Mapped[str] = mapped_column(String(50), nullable=True)
+    cep: Mapped[str] = mapped_column(String(10), nullable=True)
+    cidade: Mapped[str] = mapped_column(String(100), nullable=True)
+    estado: Mapped[str] = mapped_column(String(50), nullable=True)
+    complemento: Mapped[str] = mapped_column(String(200), nullable=True)
     proprietario: Mapped[str] = mapped_column(String(200), nullable=False)
     numero_residentes: Mapped[int] = mapped_column(Integer, default=1)
 
@@ -65,6 +68,7 @@ class Associado(Base):
     )
 
     moradia: Mapped[Moradia] = relationship(back_populates="associados")
+
     comprovantes: Mapped[list["ComprovanteResidencia"]] = relationship(
         back_populates="associado"
     )

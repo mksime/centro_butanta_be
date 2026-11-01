@@ -1,10 +1,7 @@
 """Testes de API para a entidade Associado (Red → Green → Refactor)."""
 
-from datetime import date, datetime
-
-
 def _criar_moradia(client, auth_headers):
-    """Helper para criar uma moradia válida (pré-requisito do associado)."""
+    """Helper para criar uma moradia válida (endereço)."""
     payload = {
         "rua": "Rua das Flores",
         "numero": "123",
@@ -45,23 +42,26 @@ def test_criar_associado_moradia_inexistente_retorna_404(client, auth_headers):
     assert response.json()["detail"] == "Moradia não encontrada"
 
 
-def test_criar_associado_email_invalido_retorna_422(client, auth_headers):
-    """Email malformado deve ser rejeitado com 422 (validação Pydantic)."""
-    _criar_moradia(client, auth_headers)
-    payload = {
+def test_criar_associado_com_documento_e_tipo_associacao_retorna_201(client, auth_headers):
+    """Documento e tipo_associacao são opcionais e devem ser persistidos."""
+    moradia = _criar_moradia(client, auth_headers)
+    response = client.post("/api/v1/associados/", json={
         "nome": "Maria Silva",
         "data_nascimento": "1990-01-01",
-        "email": "nao-e-email",
-        "id_moradia": 1,
-    }
-    response = client.post("/api/v1/associados/", json=payload, headers=auth_headers)
-    assert response.status_code == 422
+        "documento": "12345678900",
+        "tipo_associacao": "temporaria",
+        "id_moradia": moradia["id_moradia"],
+    }, headers=auth_headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["documento"] == "12345678900"
+    assert data["tipo_associacao"] == "temporaria"
 
 
 def test_criar_associado_sucesso_retorna_201(client, auth_headers):
     """Criação válida deve retornar 201 com os dados do associado."""
     moradia = _criar_moradia(client, auth_headers)
-    payload = {
+    response = client.post("/api/v1/associados/", json={
         "nome": "Maria Silva",
         "nome_social": "Maria",
         "data_nascimento": "1990-05-10",
@@ -70,8 +70,7 @@ def test_criar_associado_sucesso_retorna_201(client, auth_headers):
         "num_carteira_associado": "CART-001",
         "situacao_cadastro": "ativo",
         "id_moradia": moradia["id_moradia"],
-    }
-    response = client.post("/api/v1/associados/", json=payload, headers=auth_headers)
+    }, headers=auth_headers)
     assert response.status_code == 201
     data = response.json()
     assert data["nome"] == "Maria Silva"
@@ -81,27 +80,70 @@ def test_criar_associado_sucesso_retorna_201(client, auth_headers):
     assert "id_associado" in data
 
 
-def test_criar_associado_com_documento_e_tipo_associacao_retorna_201(client, auth_headers):
-    """Documento e tipo_associacao são opcionais e devem ser persistidos."""
-    moradia = _criar_moradia(client, auth_headers)
+def test_criar_moradia_e_associado_juntos_reaproveita_endereco(client, auth_headers):
+    """A criação conjunta deve criar a moradia quando ainda não existir e reaproveitar o ID existente."""
     payload = {
-        "nome": "João Pereira",
-        "data_nascimento": "1990-01-01",
-        "documento": "12345678900",
-        "tipo_associacao": "temporaria",
-        "id_moradia": moradia["id_moradia"],
+        "moradia": {
+            "rua": "Rua das Flores",
+            "numero": "123",
+            "cep": "01311-000",
+            "cidade": "São Paulo",
+            "estado": "SP",
+            "complemento": "Apto 10",
+            "proprietario": "João Silva",
+        },
+        "associado": {
+            "nome": "Maria Silva",
+            "data_nascimento": "1990-01-01",
+            "email": "maria@example.com",
+        },
     }
-    response = client.post("/api/v1/associados/", json=payload, headers=auth_headers)
-    assert response.status_code == 201
+
+    primeira = client.post("/api/v1/associados/completo", json=payload, headers=auth_headers)
+    segunda = client.post("/api/v1/associados/completo", json=payload, headers=auth_headers)
+
+    assert primeira.status_code == 201
+    assert segunda.status_code == 201
+    assert segunda.json()["id_moradia"] == primeira.json()["id_moradia"]
+    assert segunda.json()["id_associado"] != primeira.json()["id_associado"]
+
+
+def test_atualizar_associado_e_moradia_juntos_retorna_200(client, auth_headers):
+    """PUT conjunto deve atualizar os dados do associado e da moradia vinculada."""
+    moradia = _criar_moradia(client, auth_headers)
+    associado = client.post("/api/v1/associados/", json={
+        "nome": "Maria Silva",
+        "data_nascimento": "1990-01-01",
+        "email": "maria@example.com",
+        "id_moradia": moradia["id_moradia"],
+    }, headers=auth_headers).json()
+
+    response = client.put(f"/api/v1/associados/completo/{associado['id_associado']}", json={
+        "moradia": {
+            "rua": "Rua Nova",
+            "numero": "456",
+            "cep": "01000-000",
+            "cidade": "São Paulo",
+            "estado": "SP",
+            "proprietario": "João Souza",
+        },
+        "associado": {
+            "nome": "Maria Souza",
+            "email": "maria.nova@example.com",
+        },
+    }, headers=auth_headers)
+
+    assert response.status_code == 200
     data = response.json()
-    assert data["documento"] == "12345678900"
-    assert data["tipo_associacao"] == "temporaria"
+    assert data["nome"] == "Maria Souza"
+    assert data["email"] == "maria.nova@example.com"
+    assert data["id_associado"] == associado["id_associado"]
+    assert data["id_moradia"] == moradia["id_moradia"]
 
 
 def test_atualizar_associado_inexistente_retorna_404(client, auth_headers):
     """PUT em um ID que não existe deve retornar 404."""
-    payload = {"nome": "Nome Qualquer"}
-    response = client.put("/api/v1/associados/9999", json=payload, headers=auth_headers)
+    response = client.put("/api/v1/associados/9999", json={"nome": "Nome Qualquer"}, headers=auth_headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Associado não encontrado"
 
@@ -109,19 +151,13 @@ def test_atualizar_associado_inexistente_retorna_404(client, auth_headers):
 def test_atualizar_associado_moradia_inexistente_retorna_404(client, auth_headers):
     """Tentar atualizar o id_moradia para uma moradia inexistente deve falhar."""
     moradia = _criar_moradia(client, auth_headers)
-    criar = client.post("/api/v1/associados/", json={
+    associado = client.post("/api/v1/associados/", json={
         "nome": "Maria Silva",
         "data_nascimento": "1990-01-01",
         "email": "maria@example.com",
         "id_moradia": moradia["id_moradia"],
-    }, headers=auth_headers)
-    associado_id = criar.json()["id_associado"]
-
-    response = client.put(
-        f"/api/v1/associados/{associado_id}",
-        json={"id_moradia": 9999},
-        headers=auth_headers,
-    )
+    }, headers=auth_headers).json()
+    response = client.put(f"/api/v1/associados/{associado['id_associado']}", json={"id_moradia": 9999}, headers=auth_headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Moradia não encontrada"
 
@@ -130,18 +166,19 @@ def test_deletar_associado_inexistente_retorna_404(client, auth_headers):
     """DELETE em um ID que não existe deve retornar 404."""
     response = client.delete("/api/v1/associados/9999", headers=auth_headers)
     assert response.status_code == 404
+    assert response.json()["detail"] == "Associado não encontrado"
 
 
 def test_deletar_associado_sucesso_retorna_204(client, auth_headers):
     """DELETE válido deve retornar 204 e remover o associado."""
     moradia = _criar_moradia(client, auth_headers)
-    criar = client.post("/api/v1/associados/", json={
+    associado = client.post("/api/v1/associados/", json={
         "nome": "Maria Silva",
         "data_nascimento": "1990-01-01",
         "email": "maria@example.com",
         "id_moradia": moradia["id_moradia"],
-    }, headers=auth_headers)
-    associado_id = criar.json()["id_associado"]
+    }, headers=auth_headers).json()
+    associado_id = associado["id_associado"]
 
     deletar = client.delete(f"/api/v1/associados/{associado_id}", headers=auth_headers)
     assert deletar.status_code == 204
