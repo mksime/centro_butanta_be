@@ -76,6 +76,7 @@ class AssociadoBase(BaseModel):
     situacao_cadastro: str = "ativo"
     dth_ingresso: datetime | None = None
     dth_saida: datetime | None = None
+    id_administrador: int | None = None
 
 
 class AssociadoCreate(AssociadoBase):
@@ -95,12 +96,14 @@ class AssociadoUpdate(BaseModel):
     dth_ingresso: datetime | None = None
     dth_saida: datetime | None = None
     id_moradia: int | None = None
+    id_administrador: int | None = None
 
 
 class AssociadoOut(AssociadoBase):
     model_config = ConfigDict(from_attributes=True)
     id_associado: int
     id_moradia: int
+    id_administrador: int
 
 
 class AssociadoComMoradiaCreate(BaseModel):
@@ -160,6 +163,7 @@ class AssociadoComMoradiaCreate(BaseModel):
                     "situacao_cadastro",
                     "dth_ingresso",
                     "dth_saida",
+                    "id_administrador",
                 )
                 if key in value and value[key] is not None
             }
@@ -237,6 +241,7 @@ class AssociadoComMoradiaUpdate(BaseModel):
                     "dth_ingresso",
                     "dth_saida",
                     "id_moradia",
+                    "id_administrador",
                 )
                 if key in value and value[key] is not None
             }
@@ -287,6 +292,7 @@ class PagamentoBase(BaseModel):
 
 class PagamentoCreate(PagamentoBase):
     id_associado: int
+    id_administrador: int | None = None
 
 
 class PagamentoUpdate(BaseModel):
@@ -305,4 +311,4 @@ class PagamentoOut(PagamentoBase):
     model_config = ConfigDict(from_attributes=True)
     id_pagamento: int
     id_associado: int
-    id_administrador: int | None = None
+    id_administrador: int

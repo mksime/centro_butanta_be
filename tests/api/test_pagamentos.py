@@ -9,12 +9,14 @@ def _criar_associado_com_moradia(client, auth_headers):
         "proprietario": "João Silva",
     }, headers=auth_headers).json()
 
-    associado = client.post("/api/v1/associados/", json={
+    payload = {
         "nome": "Maria Silva",
         "data_nascimento": "1990-01-01",
         "email": "maria@example.com",
         "id_moradia": moradia["id_moradia"],
-    }, headers=auth_headers).json()
+    }
+
+    associado = client.post("/api/v1/associados/", json=payload, headers=auth_headers).json()
 
     return moradia, associado
 
@@ -50,6 +52,25 @@ def test_criar_pagamento_associado_inexistente_retorna_404(client, auth_headers)
     response = client.post("/api/v1/pagamentos/", json=payload, headers=auth_headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Associado não encontrado"
+
+
+def test_criar_pagamento_ignora_id_administrador_do_cliente(client, auth_headers, db):
+    """O administrador autenticado deve ser o único registro persistido no campo id_administrador."""
+    _, associado = _criar_associado_com_moradia(client, auth_headers)
+    from datetime import datetime
+
+    admin = db.query(__import__('app.models', fromlist=['Administrador']).Administrador).filter_by(email="admin@teste.com").first()
+    payload = {
+        "valor": 100.0,
+        "nome_pagador": "Maria Silva",
+        "modo_pagamento": "pix",
+        "dth_pagamento": datetime.now().isoformat(),
+        "id_associado": associado["id_associado"],
+        "id_administrador": admin.id_administrador + 999,
+    }
+    response = client.post("/api/v1/pagamentos/", json=payload, headers=auth_headers)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Você não pode atribuir outro administrador"
 
 
 def test_criar_pagamento_valor_invalido_retorna_422(client, auth_headers):

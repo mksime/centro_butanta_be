@@ -23,6 +23,7 @@ class Administrador(Base):
     cargo: Mapped[str] = mapped_column(String(100), nullable=False)
     setor: Mapped[str] = mapped_column(String(100), nullable=False)
 
+    associados_criados: Mapped[list["Associado"]] = relationship(back_populates="administrador")
     comprovantes_aprovados: Mapped[list["ComprovanteResidencia"]] = relationship(
         back_populates="aprovador"
     )
@@ -66,8 +67,12 @@ class Associado(Base):
     id_moradia: Mapped[int] = mapped_column(
         ForeignKey("moradia.id_moradia"), nullable=False
     )
+    id_administrador: Mapped[int] = mapped_column(
+        ForeignKey("administrador.id_administrador"), nullable=False
+    )
 
     moradia: Mapped[Moradia] = relationship(back_populates="associados")
+    administrador: Mapped[Administrador] = relationship(back_populates="associados_criados")
 
     comprovantes: Mapped[list["ComprovanteResidencia"]] = relationship(
         back_populates="associado"

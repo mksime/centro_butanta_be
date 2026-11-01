@@ -39,7 +39,12 @@ def create_associado(
     moradia = crud.get_moradia(db, data.id_moradia)
     if not moradia:
         raise HTTPException(status_code=404, detail="Moradia não encontrada")
-    return crud.create_associado(db, data)
+    if data.id_administrador is not None and data.id_administrador != admin.id_administrador:
+        raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
+
+    payload = data.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+    payload["id_administrador"] = admin.id_administrador
+    return crud.create_associado(db, schemas.AssociadoCreate(**payload))
 
 
 @router.post("/completo", response_model=schemas.AssociadoOut, status_code=201)
@@ -55,8 +60,12 @@ def create_associado_completo(
             status_code=422,
             detail="Payload deve conter os dados da moradia e do associado.",
         )
+    if payload.associado.id_administrador is not None and payload.associado.id_administrador != admin.id_administrador:
+        raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
 
-    return crud.create_associado_com_moradia(db, payload.moradia, payload.associado)
+    associado_payload = payload.associado.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+    associado_payload["id_administrador"] = admin.id_administrador
+    return crud.create_associado_com_moradia(db, payload.moradia, associado_payload)
 
 
 @router.put("/{id_associado}", response_model=schemas.AssociadoOut)
@@ -73,7 +82,12 @@ def update_associado(
         moradia = crud.get_moradia(db, data.id_moradia)
         if not moradia:
             raise HTTPException(status_code=404, detail="Moradia não encontrada")
-    return crud.update_associado(db, associado, data)
+    if data.id_administrador is not None and data.id_administrador != admin.id_administrador:
+        raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
+
+    payload = data.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+    payload["id_administrador"] = admin.id_administrador
+    return crud.update_associado(db, associado, schemas.AssociadoUpdate(**payload))
 
 
 @router.put("/completo/{id_associado}", response_model=schemas.AssociadoOut)
@@ -94,16 +108,25 @@ def update_associado_completo(
             detail="Payload deve conter os dados da moradia e/ou do associado.",
         )
 
-    if payload.associado is not None and payload.associado.id_moradia is not None:
-        moradia = crud.get_moradia(db, payload.associado.id_moradia)
-        if not moradia:
-            raise HTTPException(status_code=404, detail="Moradia não encontrada")
+    if payload.associado is not None:
+        if payload.associado.id_administrador is not None and payload.associado.id_administrador != admin.id_administrador:
+            raise HTTPException(status_code=403, detail="Você não pode atribuir outro administrador")
+        if payload.associado.id_moradia is not None:
+            moradia = crud.get_moradia(db, payload.associado.id_moradia)
+            if not moradia:
+                raise HTTPException(status_code=404, detail="Moradia não encontrada")
+
+    associado_data = None
+    if payload.associado is not None:
+        associado_payload = payload.associado.model_dump(exclude={"id_administrador"}, exclude_unset=True)
+        associado_payload["id_administrador"] = admin.id_administrador
+        associado_data = schemas.AssociadoUpdate(**associado_payload)
 
     return crud.update_associado_com_moradia(
         db,
         associado,
         moradia_data=payload.moradia,
-        associado_data=payload.associado,
+        associado_data=associado_data,
     )
 
 
