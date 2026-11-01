@@ -61,8 +61,14 @@ Todos os endpoints são prefixados com `/api/v1`:
 | DELETE | `/api/v1/moradias/{id}` | Deletar moradia |
 | GET | `/api/v1/associados/` | Listar associados |
 | POST | `/api/v1/associados/` | Criar associado |
+| POST | `/api/v1/associados/completo` | Criar moradia e associado juntos |
+| POST | `/api/v1/associados/juntos` | Criar moradia e associado juntos |
+| POST | `/api/v1/associados/com-moradia` | Criar moradia e associado juntos |
 | GET | `/api/v1/associados/{id}` | Buscar associado |
 | PUT | `/api/v1/associados/{id}` | Atualizar associado |
+| PUT | `/api/v1/associados/completo/{id}` | Atualizar moradia e associado juntos |
+| PUT | `/api/v1/associados/juntos/{id}` | Atualizar moradia e associado juntos |
+| PUT | `/api/v1/associados/com-moradia/{id}` | Atualizar moradia e associado juntos |
 | DELETE | `/api/v1/associados/{id}` | Deletar associado |
 | GET | `/api/v1/comprovantes/` | Listar comprovantes |
 | POST | `/api/v1/comprovantes/` | Criar comprovante |
