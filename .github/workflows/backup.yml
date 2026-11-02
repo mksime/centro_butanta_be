@@ -1,0 +1,64 @@
+name: Backup do banco
+
+on:
+  schedule:
+    # Diário às 03:17 UTC: fora do início da hora, quando o GitHub tem picos.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backup-banco
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: pg_dump → R2
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # O pg_dump precisa ser >= a versão do servidor. O Neon usa Postgres 17/18;
+      # o cliente padrão do Ubuntu 24.04 é o 16 e falharia com "server version".
+      - name: Instalar cliente PostgreSQL 18
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Instalar AWS CLI
+        run: |
+          python3 -m venv .venv-aws
+          .venv-aws/bin/pip install --quiet awscli
+          echo "$PWD/.venv-aws/bin" >> "$GITHUB_PATH"
+
+      - name: Gerar e enviar backup
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: ./scripts/backup.sh
+
+      # Um backup agendado sem alerta de falha é um backup que para em silêncio.
+      - name: Notificar falha
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "ALERT_WEBHOOK_URL não configurado; veja a falha na aba Actions."
+            exit 0
+          fi
+          curl -fsS -X POST -H "Content-Type: application/json" \
+            -d '{"content":"Falha no backup do banco (centro_butanta_be)"}' "$WEBHOOK"

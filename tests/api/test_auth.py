@@ -53,3 +53,26 @@ def test_cadastro_e_login_fluxo_completo(client, db):
         "password": "qualquercoisa",
     })
     assert login_inexistente.status_code == 401
+
+
+def test_login_bloqueia_apos_muitas_tentativas(client, db, monkeypatch):
+    """O login deve responder 429 depois de exceder o limite por IP."""
+    from app.main import limiter
+
+    crud.create_administrador(db, schemas.AdministradorCreate(
+        nome_administrador="Rate Limit",
+        email="rate.limit@example.com",
+        senha="senha123",
+        cargo="Coordenador",
+        setor="Administrativo",
+    ))
+
+    limiter.reset()
+    monkeypatch.setattr(limiter, "enabled", True)
+
+    credenciais = {"username": "rate.limit@example.com", "password": "senha123"}
+    for _ in range(5):
+        assert client.post("/api/v1/auth/token", data=credenciais).status_code == 200
+
+    bloqueado = client.post("/api/v1/auth/token", data=credenciais)
+    assert bloqueado.status_code == 429

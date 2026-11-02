@@ -1,0 +1,87 @@
+# Blueprint do Render para a API do Centro Comunitário Butantã.
+# Documentação: https://render.com/docs/blueprint-spec
+#
+# Valide antes de aplicar:
+#   render blueprints validate render.yaml
+#
+# Observações:
+# - O Postgres NÃO é provisionado aqui: usa-se um banco externo (Neon).
+#   O Postgres free do Render expira em 30 dias e não tem backup.
+# - Plano free: sem cobrança de compute. O serviço dorme após 15 min sem
+#   tráfego e a primeira requisição depois disso demora ~1 min.
+# - Não existe região no Brasil; "virginia" é a mais próxima (~110-140 ms).
+#   Use a região us-east-1 do Neon para ficar perto do web service.
+# - O filesystem é efêmero: comprovantes devem ir para storage de objetos
+#   (S3/R2/B2), nunca para disco local.
+
+services:
+  - type: web
+    name: centro-butanta-api
+    runtime: python
+    plan: free
+    region: virginia
+    branch: main
+    # Só deploya com o CI verde (GitHub Actions). Use "commit" para desativar
+    # essa exigência temporariamente.
+    autoDeployTrigger: checksPass
+
+    # /health só verifica o processo. Um /ready que consulta o banco deve ser
+    # monitorado à parte, para não reiniciar instâncias quando o banco oscilar.
+    healthCheckPath: /health
+
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+
+    # Render injeta $PORT e exige bind em 0.0.0.0.
+    # O plano free não tem preDeployCommand: as migrations rodam no start.
+    # Com 1 instância não há corrida, e o upgrade é idempotente — roda de novo
+    # a cada cold start. 1 worker abre até pool_size + max_overflow conexões
+    # (15 por padrão); ajuste junto com o limite de conexões do Neon.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips="*"
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+
+      # Em produção: /docs, /redoc e /openapi.json desabilitados e SECRET_KEY
+      # obrigatória (o app recusa subir com o valor padrão).
+      - key: ENVIRONMENT
+        value: production
+
+      # Postgres externo (Neon). No dashboard do Render, cole a connection
+      # string *pooled* com ?sslmode=require. O app normaliza o prefixo para
+      # postgresql+psycopg2:// automaticamente.
+      - key: DATABASE_URL
+        sync: false
+
+      # Gera uma chave aleatória de 256 bits. Não reutilize a do .env local.
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Origens do frontend, separadas por vírgula.
+      - key: CORS_ORIGINS
+        value: https://centro-com-butanta-pi2.bazan-antonieta.workers.dev
+
+      # Rate limit do login (por IP).
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: LOGIN_RATE_LIMIT
+        value: 5/minute
+      # memory:// vale para uma instância. Ao escalar, aponte para um Redis
+      # (Render Key Value) e instale o pacote `redis` na imagem.
+      - key: RATE_LIMIT_STORAGE_URI
+        value: memory://
+
+      # Observabilidade: cole o DSN do projeto no Sentry (deixe vazio para
+      # desativar). O envio descarta corpo, cookies e headers de autenticação.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: "0.1"
+
+      # O primeiro administrador deve ser criado uma única vez e a senha
+      # trocada em seguida. Depois disso, mantenha o seed desligado.
+      - key: ADMIN_SEED_ENABLED
+        value: "false"
+
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"

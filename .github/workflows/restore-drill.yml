@@ -1,0 +1,119 @@
+name: Teste de restore
+
+on:
+  schedule:
+    # Dia 1 de cada mês, 04:23 UTC.
+    - cron: "23 4 1 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    name: Restaurar backup e rodar a suíte
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        # Mesma major do Neon; o dump é lógico e restaura em versões >= a de origem.
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: drill
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U drill -d drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DRILL_DATABASE_URL: postgresql://drill:drill@localhost:5432/drill
+      BACKUP_PREFIX: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar cliente PostgreSQL 18
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+          python3 -m venv .venv-aws
+          .venv-aws/bin/pip install --quiet awscli
+          echo "$PWD/.venv-aws/bin" >> "$GITHUB_PATH"
+
+      - name: Baixar o backup mais recente
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          INFO="$(aws s3api list-objects-v2 \
+            --bucket "$R2_BUCKET" \
+            --prefix "$BACKUP_PREFIX/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --query "Contents[?ends_with(Key, '.dump')] | sort_by(@, &LastModified) | [-1].[Key, LastModified]" \
+            --output text)"
+
+          CHAVE="$(echo "$INFO" | cut -f1)"
+          MODIFICADO="$(echo "$INFO" | cut -f2)"
+
+          if [ -z "$CHAVE" ] || [ "$CHAVE" = "None" ]; then
+            echo "Nenhum backup .dump encontrado em s3://$R2_BUCKET/$BACKUP_PREFIX/" >&2
+            exit 1
+          fi
+
+          IDADE_DIAS=$(( ( $(date -u +%s) - $(date -u -d "$MODIFICADO" +%s) ) / 86400 ))
+          echo "Backup mais recente: $CHAVE (${IDADE_DIAS} dia(s))"
+
+          # Se o backup parou, o drill tem que falhar — não basta restaurar um
+          # arquivo antigo e dizer que está tudo bem.
+          if [ "$IDADE_DIAS" -gt 8 ]; then
+            echo "Backup mais recente tem mais de 8 dias; verifique o workflow de backup." >&2
+            exit 1
+          fi
+
+          mkdir -p backups
+          aws s3 cp "s3://$R2_BUCKET/$CHAVE" "backups/latest.dump" \
+            --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          echo "BACKUP_FILE=$PWD/backups/latest.dump" >> "$GITHUB_ENV"
+
+      - name: Restaurar e validar
+        run: ./scripts/restore_drill.sh "$BACKUP_FILE"
+
+      - name: Notificar falha
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "ALERT_WEBHOOK_URL não configurado; veja a falha na aba Actions."
+            exit 0
+          fi
+          curl -fsS -X POST -H "Content-Type: application/json" \
+            -d '{"content":"Falha no teste de restore do banco (centro_butanta_be)"}' "$WEBHOOK"
