@@ -6,7 +6,11 @@ from pydantic import ValidationError
 from app.config import DEFAULT_SECRET_KEY, MIN_SECRET_KEY_LENGTH, Settings
 
 
-def test_desenvolvimento_aceita_secret_key_padrao():
+def test_desenvolvimento_aceita_secret_key_padrao(monkeypatch):
+    # _env_file=None só ignora o .env; variáveis de ambiente (como o SECRET_KEY
+    # definido no job do CI) continuam tendo precedência. Remova-a para testar
+    # de fato o valor padrão.
+    monkeypatch.delenv("SECRET_KEY", raising=False)
     settings = Settings(_env_file=None, ENVIRONMENT="development")
     assert settings.is_production is False
     assert settings.SECRET_KEY == DEFAULT_SECRET_KEY
