@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes (PostgreSQL 16)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cbbe
+          POSTGRES_PASSWORD: cbbe_secret
+          POSTGRES_DB: centro_butanta_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cbbe -d centro_butanta_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://cbbe:cbbe_secret@localhost:5432/centro_butanta_test
+      TEST_DATABASE_URL: postgresql://cbbe:cbbe_secret@localhost:5432/centro_butanta_test
+      SECRET_KEY: chave-de-ci-com-mais-de-32-caracteres-para-o-jwt
+      RATE_LIMIT_ENABLED: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Instalar cliente PostgreSQL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Validar migrations (upgrade → downgrade → upgrade)
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          alembic check
+
+      - name: Rodar testes
+        run: pytest -q
+
+      - name: Smoke test do backup (sem upload)
+        env:
+          UPLOAD: "0"
+        run: |
+          bash -n scripts/backup.sh
+          bash -n scripts/restore_drill.sh
+          ./scripts/backup.sh
+
+      - name: Validar configuração de produção
+        env:
+          ENVIRONMENT: production
+          SECRET_KEY: chave-de-ci-de-producao-com-mais-de-32-caracteres
+          ADMIN_SEED_ENABLED: "false"
+        run: python -c "import app.main; assert app.main.settings.is_production"

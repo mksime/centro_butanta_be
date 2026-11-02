@@ -1,18 +1,22 @@
 """Rotas de autenticação (login/token)."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.auth import authenticate_admin, create_access_token
+from app.config import settings
 from app.database import get_db
+from app.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/token")
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
