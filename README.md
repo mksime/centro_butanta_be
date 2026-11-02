@@ -191,7 +191,7 @@ Qualquer requisição a esses endpoints sem o header `Authorization: Bearer <tok
 
 O uso de Vue (SPA) **não muda o protocolo de autenticação**, mas impõe três ajustes na API:
 
-1. **CORS** — já configurado em `app/main.py`. Ajuste `allow_origins` para o domínio do Vue em produção (ex.: `https://seu-frontend.com`). Em desenvolvimento estão liberados `localhost:5173` (Vite) e `localhost:3000`.
+1. **CORS** — configurado em `app/main.py` para o frontend de produção `https://centro-com-butanta-pi2.bazan-antonieta.workers.dev`. Em desenvolvimento estão liberados `http://localhost:5173` (Vite) e `http://localhost:3000`. Ao mudar o domínio do frontend, atualize `allow_origins` e publique novamente o backend.
 2. **Envio do token** — o Vue deve armazenar o JWT (ex.: `localStorage`) e enviá-lo em todo request:
    ```js
    Authorization: Bearer <access_token>

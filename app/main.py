@@ -31,13 +31,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — ajuste allow_origins para o domínio do frontend Vue em produção
+# CORS — frontend em produção e servidores locais de desenvolvimento
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://centro-com-butanta-pi2.bazan-antonieta.workers.dev",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router, prefix=settings.APP_V1_PREFIX)
